@@ -71,6 +71,10 @@ export class AuthService {
       return "Authentication successful. Proceeding without email verification."
     }
 
+    if (message.includes("Could not find the function") && message.includes("in the schema cache")) {
+      return "Database function error: The required function was not found. This might be a temporary issue. Please try again shortly. If the problem persists, ensure database migrations have run correctly and contact support."
+    }
+
     // Return original message for other errors
     return message
   }
@@ -150,6 +154,10 @@ export class AuthService {
       }
     } catch (error: any) {
       console.error("Sign up error:", error)
+      // Ensure the error thrown is an instance of Error with a message
+      if (error instanceof Error) {
+        throw error
+      }
       throw new Error(this.formatAuthError(error))
     }
   }
@@ -196,6 +204,9 @@ export class AuthService {
       }
     } catch (error: any) {
       console.error("Sign in error:", error)
+      if (error instanceof Error) {
+        throw error
+      }
       throw new Error(this.formatAuthError(error))
     }
   }
@@ -233,6 +244,9 @@ export class AuthService {
       }
     } catch (error: any) {
       console.error("Sign out error:", error)
+      if (error instanceof Error) {
+        throw error
+      }
       throw new Error(this.formatAuthError(error))
     }
   }
@@ -316,6 +330,9 @@ export class AuthService {
       return { success: true }
     } catch (error: any) {
       console.error("Reset password error:", error)
+      if (error instanceof Error) {
+        throw error
+      }
       throw new Error(this.formatAuthError(error))
     }
   }
@@ -350,23 +367,25 @@ export class AuthService {
   // Helper method to check if an email is already registered
   async checkEmailExists(email: string): Promise<boolean> {
     try {
+      // SQL function is `rpc_check_email_exists(p_email TEXT)`
+      // Client call key must match SQL parameter name `p_email`
       const { data, error } = await this.supabase.rpc("rpc_check_email_exists", {
-        email_param: email,
+        p_email: email,
       })
 
       if (error) {
-        console.error("Error calling rpc_check_email_exists:", error)
-        // Fallback or throw error depending on how critical this check is.
-        // For registration, we might want to assume email doesn't exist if RPC fails,
-        // and let the unique constraint on auth.users catch actual duplicates.
-        // However, throwing might be safer to surface underlying issues.
-        throw new Error(`Failed to check email existence: ${error.message}`)
+        console.error("Error calling rpc_check_email_exists:", error.message)
+        // Pass the original error object to formatAuthError
+        throw new Error(this.formatAuthError(error))
       }
       return data as boolean
     } catch (error: any) {
-      console.error("Exception in checkEmailExists:", error)
-      // Rethrow or handle as per application's error strategy
-      throw error
+      console.error("Exception in checkEmailExists:", error.message)
+      // Ensure we throw an actual Error object
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error(this.formatAuthError(error))
     }
   }
 }

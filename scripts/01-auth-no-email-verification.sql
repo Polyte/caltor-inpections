@@ -23,7 +23,6 @@ AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Helper function to check current user's admin status (SECURITY DEFINER)
--- This function is used in RLS policies to prevent recursion.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
 BEGIN
@@ -32,20 +31,16 @@ BEGIN
   END IF;
   RETURN EXISTS (
     SELECT 1
-    FROM public.users -- This query runs as definer, RLS of caller not applied to *this* select
+    FROM public.users
     WHERE public.users.id = auth.uid() AND public.users.role = 'admin'
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
--- Grant execute permission on is_admin to authenticated users
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
 
--- Update RLS policies to not depend on email verification
--- Users can access their data regardless of email confirmation status
-
--- RLS for 'public.users' table
+-- Update RLS policies
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
@@ -56,26 +51,24 @@ DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users
 FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
--- Admin policies for 'public.users' - Corrected to use is_admin()
 DROP POLICY IF EXISTS "Admins can view all users" ON public.users;
 CREATE POLICY "Admins can view all users" ON public.users
-FOR SELECT USING (public.is_admin()); -- Use the helper function
+FOR SELECT USING (public.is_admin());
 
 DROP POLICY IF EXISTS "Admins can manage all users" ON public.users;
 CREATE POLICY "Admins can manage all users" ON public.users
-FOR ALL USING (public.is_admin()); -- Use the helper function
+FOR ALL USING (public.is_admin());
 
 
--- RLS for 'public.inspection_reports' table
 ALTER TABLE public.inspection_reports ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view own reports" ON public.inspection_reports;
 CREATE POLICY "Users can view own reports" ON public.inspection_reports
-FOR SELECT USING (inspector_id = auth.uid()); -- Assuming inspector_id is the user's ID
+FOR SELECT USING (inspector_id = auth.uid());
 
 DROP POLICY IF EXISTS "Users can manage own reports" ON public.inspection_reports;
 CREATE POLICY "Users can manage own reports" ON public.inspection_reports
-FOR ALL USING (inspector_id = auth.uid()); -- Assuming inspector_id is the user's ID
+FOR ALL USING (inspector_id = auth.uid());
 
 DROP POLICY IF EXISTS "Admins can view all reports" ON public.inspection_reports;
 CREATE POLICY "Admins can view all reports" ON public.inspection_reports
@@ -85,7 +78,6 @@ DROP POLICY IF EXISTS "Admins can manage all reports" ON public.inspection_repor
 CREATE POLICY "Admins can manage all reports" ON public.inspection_reports
 FOR ALL USING (public.is_admin());
 
--- RLS Policies for 'notifications' table
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own notifications." ON public.notifications;
@@ -98,24 +90,41 @@ CREATE POLICY "Admins can view all notifications." ON public.notifications
 
 
 -- RPC function to check if an email exists (SECURITY DEFINER)
--- This is called by the AuthService.checkEmailExists method.
-CREATE OR REPLACE FUNCTION public.rpc_check_email_exists(email_param TEXT)
+DROP FUNCTION IF EXISTS public.rpc_check_email_exists(TEXT);
+CREATE OR REPLACE FUNCTION public.rpc_check_email_exists(p_email TEXT) -- Simplified parameter name
 RETURNS BOOLEAN AS $$
-DECLARE
-  email_exists BOOLEAN;
+-- #variable_conflict use_variable -- psql directive, may not be needed in all environments
 BEGIN
-  SELECT EXISTS (
+  -- SET search_path TO public; -- Usually not needed if objects are schema-qualified or function is in public
+  RETURN EXISTS (
     SELECT 1
-    FROM public.users
-    WHERE email = email_param
-  ) INTO email_exists;
-  RETURN email_exists;
+    FROM public.users -- Explicitly schema-qualify
+    WHERE email = p_email -- Use the simplified parameter name
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
--- Grant execute permission on the RPC function to anon and authenticated roles
+-- Add a comment to the function, which can sometimes help refresh the cache
+COMMENT ON FUNCTION public.rpc_check_email_exists(TEXT) IS 'Checks if an email exists in the public.users table. Parameter: p_email TEXT. Returns BOOLEAN.';
+
 GRANT EXECUTE ON FUNCTION public.rpc_check_email_exists(TEXT) TO anon;
 GRANT EXECUTE ON FUNCTION public.rpc_check_email_exists(TEXT) TO authenticated;
+
+-- Attempt to notify PostgREST to reload schema.
+-- This is a direct approach. If it fails due to permissions, it's non-critical for the function itself but means cache refresh is manual.
+DO $$
+BEGIN
+  PERFORM pg_notify('pgrst', 'reload schema');
+  RAISE NOTICE 'Successfully sent pg_notify to pgrst channel.';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Insufficient privilege to send pg_notify to pgrst. Schema reload might be delayed or require manual intervention.';
+  WHEN undefined_object THEN
+    RAISE NOTICE 'pg_notify or pgrst channel not available. Schema reload might be delayed or require manual intervention.';
+  WHEN OTHERS THEN
+    RAISE NOTICE 'An error occurred attempting to pg_notify pgrst: %', SQLERRM;
+END;
+$$;
 
 
 -- Success message
