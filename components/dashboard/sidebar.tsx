@@ -5,8 +5,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Zap, FileText, Plus, Users, Settings, BarChart3, Home, ClipboardList } from "lucide-react"
-import { getUserWithRole } from "@/lib/auth"
+import { Zap, FileText, Plus, Users, Settings, BarChart3, Home, ClipboardList, Bell } from "lucide-react"
+import { createClient } from "@/lib/supabase"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -21,19 +21,42 @@ const adminNavigation = [
   { name: "Settings", href: "/dashboard/admin/settings", icon: Settings },
 ]
 
+const settingsNavigation = [{ name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell }]
+
 export function Sidebar() {
   const pathname = usePathname()
   const [userRole, setUserRole] = useState<string | null>(null)
+  const supabase = createClient()
 
   useEffect(() => {
     const fetchUserRole = async () => {
-      const user = await getUserWithRole()
-      setUserRole(user?.role || null)
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser()
+        if (error || !user) return
+
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .single()
+
+        if (userError) {
+          console.error("Error fetching user role:", userError)
+          return
+        }
+
+        setUserRole(userData?.role || "employee")
+      } catch (error) {
+        console.error("Error in fetchUserRole:", error)
+      }
     }
     fetchUserRole()
-  }, [])
+  }, [supabase])
 
-  const allNavigation = userRole === "admin" ? [...navigation, ...adminNavigation] : navigation
+  const allNavigation = [...navigation, ...(userRole === "admin" ? adminNavigation : []), ...settingsNavigation]
 
   return (
     <div className="w-64 bg-white shadow-lg">

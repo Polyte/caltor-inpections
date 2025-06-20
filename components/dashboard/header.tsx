@@ -13,26 +13,68 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { LogOut, User } from "lucide-react"
-import { createClient } from "@/lib/supabase"
-import { getUserWithRole } from "@/lib/auth"
+import { LogOut, User, Settings, Loader2 } from "lucide-react"
+import { AuthService, type AuthUser } from "@/lib/auth-service"
+import { NotificationBell } from "@/components/notifications/notification-bell"
+import Link from "next/link"
 
 export function Header() {
   const router = useRouter()
-  const supabase = createClient()
-  const [user, setUser] = useState<any>(null)
+  const authService = new AuthService()
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchUser = async () => {
-      const userData = await getUserWithRole()
-      setUser(userData)
+      try {
+        // Check if authenticated first
+        const isAuth = await authService.isAuthenticated()
+        if (!isAuth) {
+          setUser(null)
+          setLoading(false)
+          return
+        }
+
+        // Get full user details
+        const currentUser = await authService.getCurrentUser()
+        setUser(currentUser)
+      } catch (error) {
+        console.error("Error fetching user:", error)
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
     }
+
     fetchUser()
-  }, [])
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = authService.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        const currentUser = await authService.getCurrentUser()
+        setUser(currentUser)
+      } else if (event === "SIGNED_OUT") {
+        setUser(null)
+      } else if (event === "TOKEN_REFRESHED" && session?.user) {
+        const currentUser = await authService.getCurrentUser()
+        setUser(currentUser)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [authService])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
+    try {
+      await authService.signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Logout error:", error)
+      // Force redirect even if logout fails
+      router.push("/login")
+    }
   }
 
   return (
@@ -43,7 +85,12 @@ export function Header() {
           <p className="text-sm text-gray-500">Welcome back to Caltor Inspections</p>
         </div>
         <div className="flex items-center space-x-4">
-          {user && (
+          <NotificationBell />
+          {loading ? (
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -63,9 +110,17 @@ export function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/profile">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/settings/notifications">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Notification Settings</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
@@ -74,6 +129,8 @@ export function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          ) : (
+            <div className="text-sm text-gray-500">Not authenticated</div>
           )}
         </div>
       </div>
