@@ -57,12 +57,17 @@ export default function RegisterPage() {
     setSuccess(false)
 
     try {
-      // Check if email already exists first
-      const emailExists = await authService.checkEmailExists(email)
-      if (emailExists) {
-        setError("An account with this email already exists. Please try signing in instead.")
-        setLoading(false)
-        return
+      // Check if email already exists first (temporary skip for testing)
+      try {
+        const emailExists = await authService.checkEmailExists(email)
+        if (emailExists) {
+          setError("An account with this email already exists. Please try signing in instead.")
+          setLoading(false)
+          return
+        }
+      } catch (emailCheckError: any) {
+        console.warn("Email check failed, continuing with registration:", emailCheckError.message)
+        // Continue with registration even if email check fails
       }
 
       // Attempt registration

@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html className="font-mono" className="" lang="en" suppressHydrationWarning>
+    <div className="font-mono"  lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <NotificationProvider>
@@ -29,6 +29,6 @@ export default function RootLayout({
           </NotificationProvider>
         </ThemeProvider>
       </body>
-    </html>
+    </div>
   )
 }

@@ -1,0 +1,30 @@
+{
+    "checksum": "9eedb4a74da4a106765d2d8d08457afc18864d95af8f650c7a55f86f6028abbe",
+    "data": {
+    "id": "866175ee-10a0-4e53-9f7b-71c5d9e46c65",
+    "createdAt": 1750669382202,
+    "updatedAt": 1750669387676,
+    "title": "Build project info",
+    "messages": [
+        {
+            "id": "b7fc1989-788e-4f23-aa28-f1603b64676c",
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Build project info"
+                }
+            ],
+            "createdAt": 1750669386021,
+            "isInternal": false,
+            "rawContent": {
+                "type": "text",
+                "text": "Build project info"
+            }
+        }
+    ],
+    "isAgent": false,
+    "isCustomAgent": true,
+    "selfDestruct": true
+}
+}

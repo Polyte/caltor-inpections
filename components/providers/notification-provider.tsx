@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { NotificationService, type Notification } from "@/lib/notifications"
 import { useToast } from "@/hooks/use-toast"
 import { createClient, isSupabaseConfigured } from "@/lib/supabase"
+import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 interface NotificationContextType {
   notifications: Notification[]
@@ -85,7 +86,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       const currentUser = session?.user || null
       setUser(currentUser)
       setIsAuthenticated(!!currentUser)

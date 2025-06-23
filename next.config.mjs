@@ -1,14 +1,13 @@
+// next.config.js
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  images: {
-    unoptimized: true,
-  },
-}
+export default {
+    swcMinify: true,
+    compiler: {
+        legacyDecorators: true,
+    },
+    webpack: (config) => {
+        config.module.exprContextCritical = false; // suppress dynamic require warnings
+        return config;
+    },
+};
 
-export default nextConfig
